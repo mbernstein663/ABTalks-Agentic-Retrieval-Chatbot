@@ -44,4 +44,4 @@ guardrails-ai
 
 ragas
 langchain-openai
-langfuse>=2.60.0
+langfuse==4.14.4

@@ -12,7 +12,10 @@ db_path = Path(__file__).resolve().parent / "data" / "coverage.db"
 
 @mcp.tool(
     name="check_coverage",
-    description="Check whether a procedure (e.g. surgery, X-ray) is covered under a specific insurance plan (e.g. Gold PPO), identified by a plan ID e.g. P101"
+    description=(
+        "Check whether the available insurance data explicitly establishes "
+        "coverage for a procedure under a specific plan."
+    )
 )
 def check_coverage(plan_id: str, procedure: str) -> dict[str, Any]:
 
@@ -21,23 +24,29 @@ def check_coverage(plan_id: str, procedure: str) -> dict[str, Any]:
 
         cursor.execute(
             """
-            SELECT CASE
-                WHEN COUNT(*) > 0 THEN 1
-                ELSE 0
-            END
+            SELECT claim_id, status
             FROM claims
             WHERE plan_id = ?
-              AND procedure = ?
+              AND LOWER(procedure) = LOWER(?)
             """,
             (plan_id, procedure)
         )
 
-        covered = bool(cursor.fetchone()[0])
+        claims = cursor.fetchall()
 
     return {
         "plan_id": plan_id,
         "procedure": procedure,
-        "covered": covered
+        "covered": None,
+        "coverage_known": False,
+        "historical_claims": [
+            {"claim_id": claim_id, "status": status}
+            for claim_id, status in claims
+        ],
+        "reason": (
+            "The available data does not define service-specific coverage. "
+            "Historical claim status does not prove coverage or exclusion."
+        )
     }
 
 

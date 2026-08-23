@@ -15,6 +15,12 @@ WORKDIR /app
 
 COPY --from=builder /install /usr/local
 
+# Dependencies are now available to normal Python
+RUN python -m spacy download en_core_web_lg
+
+# Pre-cache tokenizer so Kubernetes doesn't download it at startup
+RUN python -c "import tiktoken; tiktoken.get_encoding('cl100k_base')"
+
 COPY . .
 
 EXPOSE 8000

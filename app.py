@@ -34,8 +34,7 @@ url = "http://backend:8000/chat"
 st.title("RAG Coverage Chatbot")
 
 if "session_id" not in st.session_state:
-    # st.session_state["session_id"] = str(uuid.uuid4())
-    st.session_state["session_id"] = 1
+    st.session_state["session_id"] = secrets.randbelow(1_000_000_000) + 1
 
 if "messages" not in st.session_state:
     st.session_state.messages = [

@@ -23,9 +23,19 @@ spec:
           ports:
             - containerPort: 8000
 
+          # Secrets loaded from your Kubernetes secret
           envFrom:
             - secretRef:
                 name: backend-secrets
+
+          # Add/override specific environment variables here:
+          env:
+            - name: OLLAMA_BASE_URL
+              value: "http://host.minikube.internal:11434"
+            - name: OLLAMA_HOST
+              value: "http://host.minikube.internal:11434"
+            - name: LANGFUSE_HOST
+              value: "http://host.docker.internal:3000"
 
           readinessProbe:
             httpGet:

@@ -1,14 +1,11 @@
 from typing import TypedDict, Literal
-import ollama
 from langgraph.graph import StateGraph, START, END
-from langchain_agent import retrieve, load_history, summarize_history
+from langchain_agent import retrieve, load_history
 import sys
 from pathlib import Path
-from langchain_mcp_adapters.client import MultiServerMCPClient
 import asyncio
 import traceback
-
-from langchain_agent import retrieve, mcp_client
+import os
 
 root = Path("/app")
 
@@ -45,36 +42,8 @@ async def retrieve_with_retry(question, retries=1, timeout=120):
         None
     )
 
-mcp_client = MultiServerMCPClient(
-    {
-        "insurance": {
-            "transport": "stdio",
-            "command": sys.executable,
-            "args": [str(root / "mcp_server.py")],
-        }
-    }
-)
-
-async def load_tools():
-    tools = await mcp_client.get_tools()
-    for tool in tools:
-        print(tool.name)
-
-    tool_map = {
-        tool.name: tool
-        for tool in tools
-    }
-
-    coverage_tools = [
-        tool_map["check_coverage"],
-        tool_map["get_plan_details"],
-        tool_map["estimate_out_of_pocket_cost"],
-    ]
-
-    claims_tools = [
-        tool_map["get_claim_status"],
-    ]
-    return coverage_tools, claims_tools
+# REMOVED: Duplicate MultiServerMCPClient instantiation and unused load_tools() 
+# Tools are natively handled by retrieve() imported from langchain_agent.
 
 class AgentState(TypedDict):
     session_id: int
@@ -92,10 +61,8 @@ def get_question_with_history(state: AgentState):
     question = state["question"]
     session_id = state["session_id"]
 
-    summarize_history(
-        session_id,
-        token_limit=2000
-    )
+    # REMOVED: summarize_history() to prevent DB locking and LLM delays.
+    # main.py already summarizes the history before entering the graph.
 
     history = load_history(
         session_id,
@@ -110,59 +77,29 @@ Current question:
 {question}
 """
 
+# CONVERTED TO ASYNC: Prevents the FastAPI event loop from freezing
 def router(state: AgentState):
-    question = get_question_with_history(state)
+    question = state["question"].lower()
 
-    prompt = f"""
-Classify the user's question into exactly one category to invoke the correct specialist:
+    claims_keywords = [
+        "claim",
+        "claim id",
+        "claim status",
+        "denied",
+        "approved",
+        "processed",
+        "date filed",
+        "claim amount",
+    ]
 
-coverage
-claims
-
-Coverage includes:
-- plan benefits
-- premiums
-- deductibles
-- copays
-- coinsurance
-- covered services
-- out-of-pocket costs
-
-Claims includes:
-- claim status
-- claim amounts
-- denied claims
-- processed claims
-- questions about a specific claim
-
-Clearly classify the question using exactly one routing label:
-coverage
-claims
-
-Question and conversation context:
-{question}
-"""
-
-    response = ollama.chat(
-        model="qwen3:8b",
-        messages=[
-            {"role": "user", "content": prompt}
-        ]
-    )
-
-    router_output = response["message"]["content"].strip().lower()
-
-    if "coverage" in router_output and "claims" not in router_output:
+    if any(keyword in question for keyword in claims_keywords):
+        route = "claims"
+    else:
         route = "coverage"
 
-    elif "claims" in router_output and "coverage" not in router_output:
-        route = "claims"
+    print("ROUTE:", route)
 
-    else:
-        raise ValueError(f"Ambiguous router output: {router_output}")
     return {"route": route}
-
-
 
 
 # -------------------------
@@ -171,8 +108,7 @@ Question and conversation context:
 
 async def coverage_specialist(state: AgentState):
 
-    question = get_question_with_history(state)
-
+    question = state["question"]
 
     instructions = """
 You are the Coverage Specialist.
@@ -195,7 +131,6 @@ Do not invent information.
         await retrieve_with_retry(question)
     )
 
-
     return {
         "instructions": instructions,
         "context": context,
@@ -205,18 +140,13 @@ Do not invent information.
     }
 
 
-
-
-
-
 # -------------------------
 # AGENT 3: CLAIMS SPECIALIST
 # -------------------------
 
 async def claims_specialist(state: AgentState):
 
-    question = get_question_with_history(state)
-
+    question = state["question"]
 
     instructions = """
 You are the Claims Specialist.
@@ -257,7 +187,6 @@ def choose_specialist(state: AgentState) -> Literal["coverage_specialist", "clai
 # BUILD GRAPH
 # -------------------------
 
-
 builder = StateGraph(AgentState)
 
 builder.add_node("router", router)
@@ -278,19 +207,14 @@ builder.add_conditional_edges(
 builder.add_edge("coverage_specialist", END)
 builder.add_edge("claims_specialist", END)
 
-
 # This is what FastAPI will import
 graph = builder.compile()
-
-
-import asyncio
 
 async def main():
     result = await graph.ainvoke({
         "session_id": 1,
         "question": "What is the status of claim C1003?"
     })
-
     print(result)
 
 if __name__ == "__main__":

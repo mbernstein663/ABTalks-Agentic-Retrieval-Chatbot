@@ -5,6 +5,7 @@ services:
     image: ollama/ollama
     ports:
       - "11434:11434"
+    gpus: all
     volumes:
       - ollama_data:/root/.ollama
     restart: unless-stopped
@@ -19,9 +20,15 @@ services:
 
     env_file:
       - .env
+    
+    environment:
+      OLLAMA_HOST: http://ollama:11434
 
     volumes:
       - ./chroma_db:/app/chroma_db
+
+    depends_on:
+      - ollama
 
     restart: unless-stopped
 

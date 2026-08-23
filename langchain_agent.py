@@ -242,189 +242,6 @@ TOOL CALL FUNCTIONS
 
 """
 
-
-
-# class CoverageInput(BaseModel):
-#     plan_id: str = Field(
-#         description="Plan-identifying ID, for example P101"
-#     )
-#     procedure: str = Field(
-#         description="Medical procedure being checked, for example Surgery"
-#     )
-
-
-# class ClaimStatusInput(BaseModel):
-#     claim_id: str = Field(
-#         description="Claim-identifying ID, for example C1001"
-#     )
-
-
-# class PlanDetailsInput(BaseModel):
-#     plan_id: str = Field(
-#         description="Plan-identifying ID, for example P101"
-#     )
-
-
-# class CostEstimateInput(BaseModel):
-#     procedure: str = Field(
-#         description="Medical procedure being estimated, for example Surgery"
-#     )
-#     plan_id: str = Field(
-#         description="Plan-identifying ID, for example P101"
-#     )
-
-
-# def check_coverage(plan_id, procedure):
-#     prompt = f"SELECT CASE WHEN COUNT(*) > 0 THEN 'True' ELSE 'False' END AS MatchExists FROM claims WHERE plan_id = '{plan_id}' AND procedure = '{procedure}'"
-
-#     cursor = conn.cursor()
-#     cursor.execute(prompt)
-#     # columns = [column[0] for column in cursor.description]
-#     exists = cursor.fetchone()[0] == "True"
-
-#     return {
-#         "plan_id": plan_id,
-#         "procedure": procedure,
-#         "covered": exists
-#     }
-
-# def get_claim_status(claim_id):
-#     prompt = f"SELECT status FROM claims WHERE claim_id = '{claim_id}'"
-
-#     cursor = conn.cursor()
-#     cursor.execute(prompt)
-#     # columns = [column[0] for column in cursor.description]
-#     status = cursor.fetchone()[0]
-
-#     return {
-#         "claim_id": claim_id,
-#         "status": status
-#     }
-
-# def get_plan_details(plan_id):
-#     normalized_plan = plan_id.replace(" ", "").lower()
-
-#     prompt = """
-#         SELECT
-#             plan_id,
-#             plan_name,
-#             monthly_premium,
-#             annual_deductible,
-#             copay_pct,
-#             coverage_type,
-#             network_tier
-#         FROM plans
-#         WHERE LOWER(plan_id) = ?
-#            OR REPLACE(LOWER(plan_name), ' ', '') = ?
-#     """
-
-#     cursor = conn.cursor()
-#     cursor.execute(
-#         prompt,
-#         (plan_id.lower(), normalized_plan)
-#     )
-
-#     info = cursor.fetchone()
-
-#     if info is None:
-#         raise ValueError(
-#             f"No plan found for identifier: {plan_id}"
-#         )
-
-#     return {
-#         "plan_id": info[0],
-#         "plan_name": info[1],
-#         "monthly_premium": info[2],
-#         "annual_deductible": info[3],
-#         "copay_pct": info[4],
-#         "coverage_type": info[5],
-#         "network_tier": info[6]
-#     }
-
-# def estimate_out_of_pocket_cost(procedure, plan_id):
-#     prompt = f"SELECT claims.claim_amount * plans.copay_pct / 100.0 AS estimated_out_of_pocket FROM claims JOIN plans ON claims.plan_id = plans.plan_id WHERE claims.plan_id = '{plan_id}' AND claims.procedure = '{procedure}'"
-
-#     cursor = conn.cursor()
-#     cursor.execute(prompt)
-#     # columns = [column[0] for column in cursor.description]
-#     row = cursor.fetchone()
-#     estimate = row[0] if row else None
-
-#     return {
-#         "procedure": procedure,
-#         "plan_id": plan_id,
-#         "estimated_cost": estimate
-#     }
-
-
-
-# class CoverageOutput(BaseModel):
-#     plan_id: str
-#     procedure: str
-#     covered: bool
-
-
-# class ClaimStatusOutput(BaseModel):
-#     claim_id: str
-#     status: str
-
-
-# class PlanDetailsOutput(BaseModel):
-#     plan_id: str
-#     plan_name: str
-#     monthly_premium: int
-#     annual_deductible: int
-#     copay_pct: int
-#     coverage_type: str
-#     network_tier: str
-
-
-# class CostEstimateOutput(BaseModel):
-#     procedure: str
-#     plan_id: str
-#     estimated_cost: float | None
-
-
-
-# @tool("check_coverage", args_schema=CoverageInput)
-# def check_coverage_tool(plan_id: str, procedure: str) -> dict:
-#     """Check whether historical approved claim data suggests that a procedure is covered under a plan."""
-
-#     result = check_coverage(plan_id, procedure)
-
-#     return CoverageOutput.model_validate(result).model_dump()
-
-# @tool("get_claim_status", args_schema=ClaimStatusInput)
-# def get_claim_status_tool(claim_id:str) -> dict:
-#     """Get the current status of a specific insurance claim using its claim ID."""
-
-#     result = get_claim_status(claim_id)
-#     return ClaimStatusOutput.model_validate(result).model_dump()
-
-# @tool("get_plan_details", args_schema=PlanDetailsInput)
-# def get_plan_details_tool(plan_id: str) -> dict:
-#     """Get premium, deductible, copay, coverage type, network tier, and other details for a specific insurance plan."""
-
-#     result = get_plan_details(plan_id)
-
-#     return PlanDetailsOutput.model_validate(result).model_dump()
-
-# @tool("estimate_out_of_pocket_cost", args_schema=CostEstimateInput)
-# def estimate_out_of_pocket_cost_tool(procedure: str,plan_id: str) -> dict:
-#     """Estimate a member's out-of-pocket cost for a specific procedure under a specific insurance plan."""
-
-#     result = estimate_out_of_pocket_cost(procedure, plan_id)
-
-#     return CostEstimateOutput.model_validate(result).model_dump()
-
-
-# tools = [
-#     check_coverage_tool,
-#     get_claim_status_tool,
-#     get_plan_details_tool,
-#     estimate_out_of_pocket_cost_tool,
-# ]
-
 """
 Questions:
 
@@ -658,7 +475,96 @@ AFTER defining the tools and other context retrieval methods, we call all the fu
 """
 
 
+def structured_lookup(question):
+    question_lower = question.lower()
 
+    cursor = conn.cursor()
+
+    # Claim lookup
+    claim_match = re.search(r"\bC\d+\b", question, re.IGNORECASE)
+
+    if claim_match:
+        claim_id = claim_match.group(0).upper()
+
+        cursor.execute(
+            """
+            SELECT
+                claim_id,
+                member_id,
+                plan_id,
+                procedure,
+                claim_amount,
+                status,
+                date_filed
+            FROM claims
+            WHERE UPPER(claim_id) = ?
+            """,
+            (claim_id,)
+        )
+
+        row = cursor.fetchone()
+
+        if row is None:
+            return None
+
+        columns = [column[0] for column in cursor.description]
+        return dict(zip(columns, row))
+
+    # Plan lookup
+    plan_match = re.search(r"\bP\d+\b", question, re.IGNORECASE)
+
+    if plan_match:
+        plan_id = plan_match.group(0).upper()
+
+        cursor.execute(
+            """
+            SELECT
+                plan_id,
+                plan_name,
+                monthly_premium,
+                annual_deductible,
+                copay_pct,
+                coverage_type,
+                network_tier
+            FROM plans
+            WHERE UPPER(plan_id) = ?
+            """,
+            (plan_id,)
+        )
+
+    else:
+        cursor.execute(
+            """
+            SELECT
+                plan_id,
+                plan_name,
+                monthly_premium,
+                annual_deductible,
+                copay_pct,
+                coverage_type,
+                network_tier
+            FROM plans
+            """
+        )
+
+        rows = cursor.fetchall()
+        columns = [column[0] for column in cursor.description]
+
+        for row in rows:
+            record = dict(zip(columns, row))
+
+            if record["plan_name"].lower() in question_lower:
+                return record
+
+        return None
+
+    row = cursor.fetchone()
+
+    if row is None:
+        return None
+
+    columns = [column[0] for column in cursor.description]
+    return dict(zip(columns, row))
 
 # call all the functions:
 async def retrieve(question, k=5):
@@ -670,12 +576,13 @@ async def retrieve(question, k=5):
     chunk_ids = []
 
     if structure in ("structured", "both"):
-        tool_result = await tool_call(question)
+        tool_result = structured_lookup(question)
 
         if tool_result is not None:
             rows = [tool_result]
+            print("DIRECT STRUCTURED LOOKUP:", tool_result)
         else:
-            print("NO MCP TOOL CALL")
+            print("NO STRUCTURED RESULT")
 
     if structure in ("unstructured", "both"):
         results = vector_lookup(question, k=k) or {}
@@ -696,6 +603,7 @@ def count_tokens(text):
     return len(encoding.encode(text))
 
 def generate_answer(question, context, instructions=""):
+    print("[DEBUG] ENTER generate_answer")
     print("Local chatbot — type 'quit' to exit")
     system_prompt = f"""
     Specialized Instructions: {instructions}
@@ -706,18 +614,27 @@ def generate_answer(question, context, instructions=""):
 
     **Question:** {question}"""
 
-    # 'stream=True' activates streaming mode
-    reply = ollama.chat(model='qwen3:8b', 
-        messages=[{"role": "system", "content": system_prompt}, 
-        {"role": "user", "content": question}], stream=True
-        )
+    print("[DEBUG] CALLING OLLAMA")
+    reply = ollama.chat(
+        model="qwen3:8b",
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": question},
+        ],
+        stream=True,
+        think=False,
+        options={
+            "num_predict": 200,
+            "temperature": 0,
+        },
+)
 
     answer = ""
     for chunk in reply:
         text = chunk["message"]["content"]
         answer += text
         print(text, end="", flush=True)
-
+    print("[DEBUG] FINAL OLLAMA COMPLETE")
     print()
 
     return answer
