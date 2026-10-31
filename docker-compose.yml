@@ -4,7 +4,7 @@ services:
   ollama:
     image: ollama/ollama
     ports:
-      - "11434:11434"
+      - "127.0.0.1:11435:11434"
     gpus: all
     volumes:
       - ollama_data:/root/.ollama
@@ -16,7 +16,7 @@ services:
       dockerfile: Dockerfile
 
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8766:8000"
 
     env_file:
       - .env
@@ -39,10 +39,13 @@ services:
       dockerfile: Dockerfile.frontend
 
     ports:
-      - "8501:8501"
+      - "127.0.0.1:8502:8501"
 
     env_file:
       - .env
+
+    environment:
+      BACKEND_URL: http://backend:8000
 
     depends_on:
       - backend

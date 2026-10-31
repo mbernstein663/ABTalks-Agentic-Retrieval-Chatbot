@@ -1,5 +1,0 @@
-#in /chatbot-ui terminal:
-npm run dev
-
-#in project root:
-uvicorn app:app --reload

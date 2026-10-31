@@ -1,0 +1,111 @@
+TERMINAL CHAT EVALUATION HARNESS
+================================
+
+This runs the real /chat pipeline without Streamlit, Docker, or Kubernetes.
+Use PowerShell from the repository root.
+
+Prerequisites
+-------------
+
+ollama serve
+
+2. Start the backend
+-----------------
+
+$env:EVAL_DIAGNOSTICS='true'
+.\.venv\Scripts\python.exe -m uvicorn main:app --app-dir coverage-chatbot-api
+
+Interactive use
+---------------
+
+   .\.venv\Scripts\python.exe eval_chat.py
+
+Scripted 10-question test
+-------------------------
+
+In terminal 2, create one new session ID. Both batches below reuse it so history
+continues across all ten questions:
+
+   $sessionId = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+
+Run questions 1-5:
+
+   .\.venv\Scripts\python.exe eval_chat.py --session-id $sessionId --member-id 101 `
+     --message "What is the status of claim C1003?" `
+     --message "What were the amount and filing date for claim C1003?" `
+     --message "How can I appeal a denied insurance claim?" `
+     --message "What are the monthly premium and annual deductible for plan P101?" `
+     --message "What are the copay rate, coverage type, and network tier for plan P101?"
+
+Wait for the rate-limit window, then run questions 6-10 in the same session:
+
+   Start-Sleep -Seconds 65
+
+   .\.venv\Scripts\python.exe eval_chat.py --session-id $sessionId --member-id 101 `
+     --message "Are X-rays explicitly covered by plan P102?" `
+     --message "Can you estimate my out-of-pocket cost for surgery under plan P103?" `
+     --message "When is prior authorization required?" `
+     --message "How does in-network coverage differ from out-of-network coverage?" `
+     --message "Summarize what you told me about claim C1003 and appealing its denial."
+
+What to inspect
+---------------
+
+For every answer, verify:
+
+- category: structured, unstructured, or both is sensible for the question.
+- route: claims or coverage selected the correct specialist.
+- cache: normally miss for these unique questions; repeated public questions
+  should show hit, while private claim-tool responses should not be cached.
+- history.loaded and history.summary: earlier turns appear and summarization
+  reports whether it ran, including before/after token counts.
+- tool_calls: tool name, input, result, and any fallback error match the request.
+- retrieval: chunk IDs, document text, source metadata, and distance are relevant.
+  Lower Chroma distance generally means a closer semantic match.
+- instructions, context, and prompt: the final model input contains the correct
+  specialist instructions, evidence, and conversation history.
+- guardrails: input redaction and output changes are visible; raw_answer shows
+  the pre-output-guardrail response only in evaluation mode.
+- tokens and timings_ms: input/output size and graph, LLM, guardrail, history,
+  cache, total, and client round-trip latency are plausible.
+- answer: it is supported by the shown tool/retrieval context and does not invent
+  coverage, costs, medical advice, or claim details.
+
+Expected coverage from the ten questions
+----------------------------------------
+
+- Claims routing and get_claim_status MCP tool.
+- Tool limitations for amount/date questions.
+- Appeal-policy vector retrieval.
+- Direct plan lookup fallback for premium, deductible, and plan attributes.
+- check_coverage MCP tool and its explicit unknown-coverage result.
+- Cost-estimation uncertainty when required data is absent.
+- Prior-authorization and network-policy retrieval.
+- Ten-turn history integration and a final cross-turn summary request.
+
+Optional cache check
+--------------------
+
+After another 65-second wait, repeat a non-private question with the same server
+process. Its diagnostics should report cache=hit:
+
+   Start-Sleep -Seconds 65
+   .\.venv\Scripts\python.exe eval_chat.py --session-id $sessionId --member-id 101 `
+     --message "When is prior authorization required?"
+
+Troubleshooting
+---------------
+
+- Connection refused: terminal 1 is not ready or is not running on port 8000.
+- diagnostics=disabled: restart terminal 1 with EVAL_DIAGNOSTICS=true.
+- HTTP 429: wait at least 60 seconds before sending another batch.
+- Timeout: confirm Ollama is running and qwen3:8b responds locally.
+- First-run tokenizer download error: allow the virtual environment one-time
+  internet access so tiktoken can populate its local cl100k_base cache.
+- Langfuse authentication warnings are expected when Langfuse keys are absent;
+  local harness diagnostics still work.
+
+Stop the backend
+----------------
+
+Return to terminal 1 and press Ctrl+C.

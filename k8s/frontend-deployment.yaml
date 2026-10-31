@@ -17,8 +17,12 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: abtalksai-cohort-frontend:latest
+          image: abtalksai-cohort-frontend:k8s-20261028
           imagePullPolicy: Never
 
           ports:
             - containerPort: 8501
+
+          env:
+            - name: BACKEND_URL
+              value: "http://backend:8000"

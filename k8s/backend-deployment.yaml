@@ -17,23 +17,21 @@ spec:
     spec:
       containers:
         - name: backend
-          image: abtalksai-cohort-backend:v2
+          image: abtalksai-cohort-backend:k8s-20261028
           imagePullPolicy: Never
 
           ports:
             - containerPort: 8000
 
-          # Secrets loaded from your Kubernetes secret
           envFrom:
             - secretRef:
                 name: backend-secrets
 
-          # Add/override specific environment variables here:
           env:
             - name: OLLAMA_BASE_URL
-              value: "http://host.minikube.internal:11434"
+              value: "http://host.minikube.internal:11435"
             - name: OLLAMA_HOST
-              value: "http://host.minikube.internal:11434"
+              value: "http://host.minikube.internal:11435"
             - name: LANGFUSE_HOST
               value: "http://host.docker.internal:3000"
 

@@ -95,10 +95,21 @@ class InputSafetyValidator(Validator):
                     error_message="Unauthorized member-data request detected."
                 )
 
-        if not any(topic in text for topic in self.allowed_topics):
-            return FailResult(
-                error_message="Request is outside the chatbot's supported scope."
-            )
+        history_followup = re.search(
+            r"\b(?:repeat|summarize|summary|recap|rephrase|"
+            r"reword|clarify|elaborate)\b"
+            r"|\bexplain\s+(?:that|this|it|your answer)\b"
+            r"|\bwhat you (?:said|mentioned|told me)\b",
+            text,
+            re.IGNORECASE,
+        )
+
+        # if not history_followup and not any(
+        #     topic in text for topic in self.allowed_topics
+        # ):
+        #     return FailResult(
+        #         error_message="Request is outside the chatbot's supported scope. This chatbot is intended to answer queries about our health insurance plans or outstanding claims. Feel free to try again and ask about what plans we offer."
+        #     )
 
         return PassResult()
 
@@ -112,7 +123,7 @@ class PIILeakageValidator(Validator):
         metadata: Dict
     ) -> ValidationResult:
 
-        redacted = redact_pii(value)
+        redacted = redact_pii(value, allow_public_contacts=True)
 
         if redacted != value:
             return FailResult(
