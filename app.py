@@ -281,6 +281,7 @@ if prompt:
                             "tool_calls": tool_calls,
                             "context_warning": context_warning,
                         })
+                        st.rerun()
         except requests.exceptions.Timeout:
             loading.update(label="Request timed out", state="error")
             st.error("The request exceeded the response time limit. Check backend logs; "

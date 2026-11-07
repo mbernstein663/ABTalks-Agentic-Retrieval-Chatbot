@@ -3,7 +3,8 @@ kind: Deployment
 metadata:
   name: backend
 spec:
-  replicas: 2
+  # Session state is pod-local; keep a single backend replica for this demo.
+  replicas: 1
 
   selector:
     matchLabels:
