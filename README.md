@@ -1,8 +1,8 @@
 # Cohort Insurance Chatbot
 
-**This chatbot is an evidence-first, agentic RAG assistant for a fictional health-insurance company.** This code's scaffold was built during the ABTalks AI Learning Cohort to demonstrate tool-calling agents, structured + semantic retrieval, and local LLM orchestration. It was later improved and finished by implementing agentic evidence verification
+**This chatbot is an evidence-first, agentic RAG assistant for a fictional health-insurance company.** The initial scaffold was built during the #ABTalksAI Learning Cohort to demonstrate tool-calling agents, structured and semantic retrieval, and local LLM orchestration. I subsequently extended it with agentic evidence verification and operational diagnostics.
 
-*The application uses synthetic plan, claim, and policy data. It is a technical demonstration that does not represent not a real insurer, a source of personalized coverage decisions, or medical advice.*
+*The application uses synthetic plan, claim, and policy data. It is a technical demonstration, not a real insurer, a source of personalized coverage decisions, or medical advice.*
 
 ## 1. Project Overview
 
@@ -10,7 +10,7 @@ The chatbot answers questions about three fictional insurance plans: **Gold PPO,
 
 Unlike conventional RAG, this system uses an **LLM-driven retrieval agent** to select an appropriate evidence source for each pass. A separate verifier checks whether the gathered evidence is sufficient before the answer is generated. When necessary, verification can initiate a bounded follow-up retrieval.
 
-The project demonstrates a complete, traceable, and multi-component AI application that follows the golden rule of RAG: **a plausible answer is not the same as an answer supported by the available data**. This chatbot follows its constraints when the ground truth is not available.
+The project demonstrates a complete, traceable, and multi-component AI application that follows an important principle of RAG: **a plausible answer is not the same as an answer supported by the available data**. This chatbot follows constraint when the ground truth is not available.
 
 ## 2. Architecture & Key Features
 
@@ -77,9 +77,9 @@ flowchart TD
 - **Inspectability and guardrails:** The Streamlit UI shows expandable tool-call results and policy chunk references. The backend also applies input/output validation, PII redaction, and request throttling.
 - **Operational instrumentation:** Langfuse tracing hooks and Ollama context diagnostics are included; observability and container orchestration are part of the final deployment validation.
 
-**Implementation map:** [`app.py`](app.py) (UI) → [`coverage-chatbot-api/main.py`](coverage-chatbot-api/main.py) (API) → [`agent_verifier.py`](agent_verifier.py) (verification and retry) → [`langchain_agent.py`](langchain_agent.py) (retrieval, memory, answer generation) → [`mcp_server.py`](mcp_server.py) (MCP endpoints). Earlier cohort experiments remain in the repository under `/old_files` as an artifact of previous experimentation and failures.
+**Implementation map:** [`app.py`](app.py) (UI) → [`coverage-chatbot-api/main.py`](coverage-chatbot-api/main.py) (API) → [`agent_verifier.py`](agent_verifier.py) (verification and retry) → [`langchain_agent.py`](langchain_agent.py) (retrieval, memory, answer generation) → [`mcp_server.py`](mcp_server.py) (MCP endpoints).
 
-**Evaluation:** 
+**Evaluation and validation:** The example questions below exercise single- and multi-record retrieval, policy lookup, evidence sufficiency, and follow-up context. Local Kubernetes deployment is validated separately by checking Pod readiness and testing the chat interface; healthy Pods alone do not demonstrate answer correctness. This README does not claim a benchmark improvement without a corresponding reproducible evaluation.
 
 ## 3. Supported Questions & Example Scenarios
 
@@ -97,7 +97,7 @@ Claims in [`data/claims.csv`](data/claims.csv) have IDs such as `C1002` (**Appro
 
 ### Test my work!
 
-Start with the first few prompts, then try combined and multi-record questions. The table describes the **expected capabilities being exercised** and does not a guarantee a specific internal route. The examples are based on the included dataset and prior testing.
+Start with the first few prompts, then try combined and multi-record questions. The table describes the **expected capabilities being exercised** and does not guarantee a specific internal route. The examples are based on the included dataset and prior testing.
 
 | # | Ask the chatbot | What it exercises |
 |---:|---|---|
@@ -123,7 +123,7 @@ Start with the first few prompts, then try combined and multi-record questions. 
 | Structured storage | SQLite | Plans, claims and conversation records |
 | Semantic search | ChromaDB + `all-MiniLM-L6-v2` | Embedding-based policy/document search |
 | Observability | Langfuse | Trace hooks for model and application activity |
-| Packaging / orchestration | Docker Compose, Minikube / Kubernetes | Reproducible local deployment after configuration validation |
+| Packaging / orchestration | Docker Compose, Minikube / Kubernetes | Local containerized services and a two-tier Kubernetes application deployment |
 
 ### A. Local development — recommended for initial testing
 
@@ -162,18 +162,141 @@ Invoke-RestMethod http://127.0.0.1:8765/health
 
 Adjust `BACKEND_URL` if you choose another port. **Configure optional Langfuse credentials locally, never in source control**.
 
-### B. Docker Compose — deployment verification pending
+### B. Docker Compose — local containers and supporting services
 
-The repository contains [`Dockerfile`](Dockerfile), [`Dockerfile.frontend`](Dockerfile.frontend), and [`docker-compose.yml`](docker-compose.yml). The existing Compose configuration defines **frontend, backend, and Ollama** services, but has **not yet been revalidated against the finalized chatbot**. Docker-specific service names, Ollama connectivity, image startup, and data paths must pass an end-to-end test before a one-command deployment is advertised as reliable.
+The repository includes [`Dockerfile`](Dockerfile), [`Dockerfile.frontend`](Dockerfile.frontend), and [`docker-compose.yml`](docker-compose.yml). The main Compose stack defines **Streamlit**, **FastAPI**, and **Ollama**. It is useful for running the application without Kubernetes or for keeping Ollama available while Minikube hosts the frontend and backend.
 
-Langfuse's separate development stack is defined in [`docker-compose.langfuse.yml`](docker-compose.langfuse.yml). Confirm that the UI loads **and** that requests create real traces before considering this stage complete. Keep API keys, encryption keys, and other credentials out of committed YAML.
+From the repository root in **PowerShell**, start the standalone Compose application if you want to run without Kubernetes:
 
-### C. Minikube / Kubernetes — deployment verification pending
+```powershell
+docker compose up -d --build
+docker compose ps
+```
 
-The [`k8s/`](k8s/) directory includes backend/frontend Deployments and Services from the original cohort. Those manifests need a final configuration pass before reuse (notably Ollama networking, secrets, image tags, persistent data, and the backend replica count). **Kubernetes should deploy an already-working Docker image, not serve as the debugging environment.**
+The Compose application exposes the frontend at **http://localhost:8502** and the backend at **http://localhost:8766**. Ollama is mapped to host port **11435**. These are **not** the Kubernetes frontend and backend endpoints.
 
-Final acceptance sequence: **local Python works → Docker Compose works → Langfuse records traces → Minikube deploys the same application successfully**. Once those stages pass, this section can be updated with the exact tested commands and access instructions.
+Langfuse has a separate development stack in [`docker-compose.langfuse.yml`](docker-compose.langfuse.yml):
+
+```powershell
+docker compose -f docker-compose.langfuse.yml up -d
+```
+
+Its UI is at **http://localhost:3000**. Set non-default credentials and any tracing-related configuration in ignored local environment files; never commit secrets. Confirm a fresh chatbot interaction creates a trace before claiming end-to-end trace ingestion.
+
+### C. Minikube / Kubernetes — local deployment
+
+The [`k8s/`](k8s/) directory contains the backend and frontend **Deployments** and **Services** used for the completed local Kubernetes deployment. This is a **hybrid local setup**: Kubernetes runs the application containers, while **Ollama and Langfuse remain outside the cluster**, hosted by Docker Compose. It is not a public cloud deployment.
+
+| Component | Runs in | Access / configuration |
+|---|---|---|
+| Streamlit frontend | Minikube (1 Pod) | `frontend` NodePort Service, port `8501` / NodePort `30501` |
+| FastAPI backend | Minikube (1 Pod) | Internal `backend` ClusterIP Service at `http://backend:8000` |
+| Ollama | Docker Compose on host | Host port `11435`; backend uses `http://host.minikube.internal:11435` |
+| Langfuse | Separate Docker Compose stack | Host port `3000`; backend manifest uses `http://host.docker.internal:3000` |
+
+The backend Deployment uses `/health` readiness and liveness probes and reads configuration from a Kubernetes Secret named **`backend-secrets`**. The manifests use the local image tags `abtalksai-cohort-backend:k8s-20261028` and `abtalksai-cohort-frontend:k8s-20261028` with `imagePullPolicy: Never`, so **both images must exist inside Minikube**.
+
+#### 1. Start prerequisites (Windows PowerShell)
+
+Install **Docker Desktop, Minikube, and kubectl**. Start Docker Desktop before running these commands. Execute them from the repository root:
+
+```powershell
+# Start the local cluster and select its Kubernetes context.
+minikube start --driver=docker
+kubectl config use-context minikube
+minikube status
+kubectl get nodes
+
+# Start host-side dependencies (do not start duplicate frontend/backend
+# Compose services when testing the Kubernetes application).
+docker compose up -d ollama
+docker compose -f docker-compose.langfuse.yml up -d
+
+# Confirm that Ollama is reachable on the host.
+curl.exe -f http://127.0.0.1:11435/api/tags
+```
+
+If the required models are not already present in the **Compose Ollama container**, pull them there (a host-installed Ollama instance may use a different model store):
+
+```powershell
+docker compose exec ollama ollama pull qwen3:8b
+docker compose exec ollama ollama pull gemma3:4b
+```
+
+#### 2. Configure the backend Secret
+
+The backend requires `backend-secrets`, created from your local, untracked `.env` file containing the applicable backend environment variables:
+
+```powershell
+kubectl get secret backend-secrets
+
+# Only if the Secret does not exist:
+kubectl create secret generic backend-secrets --from-env-file=.env
+```
+
+Creating this Secret imports entries from `.env` into Kubernetes; **inspect that file before using it**, keep it out of Git, and do not put real credentials into manifests. If configuration changes later, update the Secret and restart the backend Deployment so the new environment values are loaded.
+
+#### 3. Build the images inside Minikube
+
+For a first deployment, or when an image must be rebuilt, run:
+
+```powershell
+minikube image build -t abtalksai-cohort-backend:k8s-20261028 -f Dockerfile .
+minikube image build -t abtalksai-cohort-frontend:k8s-20261028 -f Dockerfile.frontend .
+
+# Verify the pinned image tags exist in Minikube.
+minikube image ls | Select-String 'abtalksai-cohort-(backend|frontend)'
+```
+
+#### 4. Deploy and check health
+
+```powershell
+kubectl apply -f .\k8s\
+kubectl rollout status deployment/backend --timeout=180s
+kubectl rollout status deployment/frontend --timeout=180s
+kubectl get pods,svc
+```
+
+Expect a **Ready** frontend Pod and backend Pod, a `frontend` NodePort Service on `30501`, and a `backend` ClusterIP Service on `8000`. `kubectl get pods,svc` documents the running resources, but the chatbot still needs an end-to-end functional check.
+
+If `kubectl apply` reports that it cannot connect to an API server on `127.0.0.1`, check `minikube status`, then restore the existing cluster if needed:
+
+```powershell
+minikube stop
+minikube start --driver=docker
+kubectl get nodes
+kubectl apply -f .\k8s\
+```
+
+Do **not** use `--validate=false` as a workaround for an unreachable Kubernetes API server.
+
+#### 5. Open the Kubernetes frontend
+
+Keep this command running in a **separate PowerShell window**:
+
+```powershell
+kubectl port-forward service/frontend 8503:8501
+```
+
+Open **http://localhost:8503**. This is the **Kubernetes deployment**; **http://localhost:8502** is the separate Docker Compose frontend. On Windows with the Docker driver, port-forwarding is a reliable local access method. `minikube service frontend --url` is another option, but may also require a terminal to remain open.
+
+#### 6. Try it!
+
+I encourage you to test my app. Check the answers against the synthetic DB records and any retrieved evidence displayed in the UI. Ask a follow-up such as **“Which plan has the lower deductible?”** to check conversation continuity. 
+
+#### Troubleshooting and scope
+
+```powershell
+kubectl get pods -o wide
+kubectl get services
+kubectl get endpoints backend frontend
+kubectl logs deployment/backend --tail=100
+kubectl logs deployment/frontend --tail=100
+kubectl describe deployment backend
+```
+
+**Scope:** This deployment demonstrates local Kubernetes orchestration, internal service discovery, health probes, environment-based configuration, and repeatable image builds. It intentionally uses **one backend replica** and **does not configure persistent Kubernetes volumes, image registry publishing, autoscaling, or public ingress**. Local session or database state may be lost when Pods are replaced; do not describe the system as production-ready or highly available.
 
 ---
 
-*ABTalks AI Learning Cohort project · Synthetic data and local models · For engineering demonstration and evaluation only.*
+*#ABTalksAI Learning Cohort project · Synthetic data and local models · For engineering demonstration and evaluation only.*
