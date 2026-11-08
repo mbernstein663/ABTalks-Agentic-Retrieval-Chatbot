@@ -1,4 +1,4 @@
-# Cohort Insurance Chatbot
+# Health Insurance Chatbot
 
 **This chatbot is an evidence-first, agentic RAG assistant for a fictional health-insurance company.** The initial scaffold was built during the #ABTalksAI Learning Cohort to demonstrate tool-calling agents, structured and semantic retrieval, and local LLM orchestration. I subsequently extended it with agentic evidence verification and operational diagnostics.
 
